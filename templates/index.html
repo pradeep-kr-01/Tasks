@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image capturing and Uploading TO S3</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>Image capturing and Uploading TO S3</h1>
+
+    <img src="{{ url_for('video_feed', filter_type='none') }}" id="videoElement" />
+
+    <div class="filters">
+        <h3>Apply Filter</h3>
+        <a href="/video_feed/grayscale">Grayscale</a>
+        <a href="/video_feed/invert">Invert Colors</a>
+        <a href="/video_feed/none">None</a>
+    </div>
+    <br>
+    <form method="POST" action="/capture">
+        <input type="hidden" name="filter_type" id="filterInput" value="none">
+        <button type="submit">Image capturing and Uploading TO S3</button>
+    </form>
+
+    <script>
+        // Update the filter type input based on selected filter
+        const links = document.querySelectorAll('.filters a');
+        links.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const filter = link.getAttribute('href').split('/').pop();
+                document.getElementById('filterInput').value = filter;
+                document.getElementById('videoElement').src = `/video_feed/${filter}`;
+            });
+        });
+    </script>
+</body>
+</html>
