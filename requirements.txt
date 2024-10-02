@@ -1,4 +1,3 @@
-pip install --upgrade pip
 Flask==2.3.3
 boto3==1.28.70
 opencv-python==4.8.1.78
