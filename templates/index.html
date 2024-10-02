@@ -3,126 +3,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image capturing and Uploading TO S3</title>
+    <title>Image Capturing and Uploading to S3</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-    <h1>Image capturing and Uploading TO S3</h1>
+    <h1>Image Capturing and Uploading to S3</h1>
 
-    <img src="{{ url_for('video_feed', filter_type='none') }}" id="videoElement" />
+    <video id="video" autoplay playsinline></video>
+    <canvas id="captured-image" style="display:none;"></canvas>
 
     <div class="filters">
         <h3>Apply Filter</h3>
-        <a href="/video_feed/grayscale">Grayscale</a>
-        <a href="/video_feed/invert">Invert Colors</a>
-        <a href="/video_feed/none">None</a>
+        <button class="filter-btn" data-filter="grayscale">Grayscale</button>
+        <button class="filter-btn" data-filter="invert">Invert Colors</button>
+        <button class="filter-btn" data-filter="none">None</button>
     </div>
     <br>
-    <form method="POST" action="/capture">
-        <input type="hidden" name="filter_type" id="filterInput" value="none">
-        <button type="submit">Image capturing and Uploading TO S3</button>
-    </form>
+    <button id="capture-btn">Capture Image</button>
+    <button id="submit-btn">Upload Image</button>
+    <p id="loading-text" style="display:none;">Uploading...</p>
 
-            <script>
-                const video = document.getElementById('video');
-                const captureBtn = document.getElementById('capture-btn');
-                const submitBtn = document.getElementById('submit-btn');
-                const canvas = document.getElementById('captured-image');
-                const loadingText = document.getElementById('loading-text');
-                const filters = document.querySelectorAll('.filter-btn');
-                let currentFilter = 'none';
-                let capturedImageData;
+    <div id="stored-images"></div>
 
-                // Get video stream from webcam
-                navigator.mediaDevices.getUserMedia({ video: true })
-                    .then(stream => {
-                        video.srcObject = stream;
-                    })
-                    .catch(err => {
-                        console.error('Error accessing webcam: ', err);
+    <script>
+        const video = document.getElementById('video');
+        const captureBtn = document.getElementById('capture-btn');
+        const submitBtn = document.getElementById('submit-btn');
+        const canvas = document.getElementById('captured-image');
+        const loadingText = document.getElementById('loading-text');
+        const filters = document.querySelectorAll('.filter-btn');
+        let currentFilter = 'none';
+        let capturedImageData;
+
+        // Get video stream from webcam
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(err => {
+                console.error('Error accessing webcam: ', err);
+                alert('Unable to access the camera. Please check your permissions.');
+            });
+
+        // Apply selected filter to the video stream
+        filters.forEach(filterBtn => {
+            filterBtn.addEventListener('click', () => {
+                currentFilter = filterBtn.getAttribute('data-filter');
+                video.style.filter = getCSSFilter(currentFilter);
+            });
+        });
+
+        // Capture the image from the video stream
+        captureBtn.addEventListener('click', () => {
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.filter = getCSSFilter(currentFilter);  // Apply filter to the canvas
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            canvas.style.display = 'block';
+            capturedImageData = canvas.toDataURL('image/png');  // Capture image data in base64
+        });
+
+        // Submit the captured image to the backend for S3 storage
+        submitBtn.addEventListener('click', () => {
+            if (!capturedImageData) {
+                alert('Please capture an image first.');
+                return;
+            }
+            
+            loadingText.style.display = 'block';  // Show loading text
+
+            fetch('/save_image', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ image: capturedImageData })
+            })
+            .then(response => response.json())
+            .then(data => {
+                loadingText.style.display = 'none';  // Hide loading text
+                alert(data.message);
+                loadStoredImages();  // Refresh stored images after uploading
+            })
+            .catch(error => {
+                loadingText.style.display = 'none';  // Hide loading text
+                console.error('Error submitting image: ', error);
+                alert('Error uploading image. Please try again.');
+            });
+        });
+
+        // Load stored images from S3
+        function loadStoredImages() {
+            fetch('/get_images')
+                .then(response => response.json())
+                .then(data => {
+                    const storedImagesDiv = document.getElementById('stored-images');
+                    storedImagesDiv.innerHTML = '';  // Clear previous images
+
+                    // Display each stored image
+                    data.images.forEach(imageUrl => {
+                        const imgElement = document.createElement('img');
+                        imgElement.src = imageUrl;
+                        imgElement.style.width = '150px'; // Set a fixed width for images
+                        imgElement.style.margin = '10px'; // Add margin for spacing
+                        storedImagesDiv.appendChild(imgElement);
                     });
-
-                // Apply selected filter to the video stream
-                filters.forEach(filterBtn => {
-                    filterBtn.addEventListener('click', () => {
-                        currentFilter = filterBtn.getAttribute('data-filter');
-                        video.style.filter = getCSSFilter(currentFilter);
-                    });
+                })
+                .catch(error => {
+                    console.error('Error loading stored images: ', error);
                 });
+        }
 
-                // Capture the image from the video stream
-                captureBtn.addEventListener('click', () => {
-                    const context = canvas.getContext('2d');
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    context.filter = getCSSFilter(currentFilter);  // Apply filter to the canvas
-                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    canvas.style.display = 'block';
-                    capturedImageData = canvas.toDataURL('image/png');  // Capture image data in base64
-                });
+        // Helper function to get CSS filter string based on filter type
+        function getCSSFilter(filterType) {
+            switch (filterType) {
+                case 'grayscale':
+                    return 'grayscale(100%)';
+                case 'invert':
+                    return 'invert(100%)';
+                default:
+                    return 'none';
+            }
+        }
 
-                // Submit the captured image to the backend for S3 storage
-                submitBtn.addEventListener('click', () => {
-                    if (!capturedImageData) {
-                        alert('Please capture an image first.');
-                        return;
-                    }
-                    
-                    loadingText.style.display = 'block';  // Show loading text
-
-                    fetch('/save_image', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ image: capturedImageData })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        loadingText.style.display = 'none';  // Hide loading text
-                        alert(data.message);
-                        loadStoredImages();  // Refresh stored images after uploading
-                    })
-                    .catch(error => {
-                        loadingText.style.display = 'none';  // Hide loading text
-                        console.error('Error submitting image: ', error);
-                    });
-                });
-
-                // Load stored images from S3
-                function loadStoredImages() {
-                    fetch('/get_images')
-                        .then(response => response.json())
-                        .then(data => {
-                            const storedImagesDiv = document.getElementById('stored-images');
-                            storedImagesDiv.innerHTML = '';  // Clear previous images
-
-                            // Display each stored image
-                            data.images.forEach(imageUrl => {
-                                const imgElement = document.createElement('img');
-                                imgElement.src = imageUrl;
-                                storedImagesDiv.appendChild(imgElement);
-                            });
-                        })
-                        .catch(error => {
-                            console.error('Error loading stored images: ', error);
-                        });
-                }
-
-                // Helper function to get CSS filter string based on filter type
-                function getCSSFilter(filterType) {
-                    switch (filterType) {
-                        case 'grayscale':
-                            return 'grayscale(100%)';
-                        case 'invert':
-                            return 'invert(100%)';
-                        default:
-                            return 'none';
-                    }
-                }
-
-                // Load stored images on page load
-                window.onload = loadStoredImages;
+        // Load stored images on page load
+        window.onload = loadStoredImages;
     </script>
 </body>
 </html>
