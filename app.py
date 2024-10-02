@@ -82,4 +82,7 @@ def open_camera():
     return {'message': 'Camera is opened'}, 200
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Get the port number from environment variables or default to 5000
+    port = int(os.environ.get("PORT", 5000))
+    # Bind to 0.0.0.0 to make the app externally accessible on the server
+    app.run(host="0.0.0.0", port=port, debug=True)
